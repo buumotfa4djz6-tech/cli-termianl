@@ -1,0 +1,4 @@
+prompt_toolkit>=3.0.0
+pyyaml>=6.0
+pygments>=2.0.0
+pytest>=7.0.0
