@@ -694,14 +694,26 @@ impl App {
         if self.mode == Mode::TemplateMenu {
             self.render_template_menu(frame);
         }
+        if self.mode == Mode::TemplateForm {
+            self.render_template_form(frame);
+        }
     }
 
     fn render_template_menu(&self, frame: &mut ratatui::Frame) {
         let templates = self.templates.templates();
         let area = frame.area();
 
-        // Center a popup box.
-        let width = 50.min(area.width.saturating_sub(4));
+        // Calculate width based on longest label + command preview.
+        let max_len = templates
+            .iter()
+            .map(|t| {
+                let cmd_preview: String = t.command().chars().take(30).collect();
+                t.label.chars().count() + cmd_preview.chars().count() + 5
+            })
+            .max()
+            .unwrap_or(30);
+
+        let width = (max_len as u16 + 4).min(80).min(area.width.saturating_sub(4));
         let height = (templates.len() as u16 + 4).min(area.height.saturating_sub(2));
         let popup = ratatui::layout::Rect::new(
             (area.width - width) / 2,
@@ -714,7 +726,9 @@ impl App {
             .iter()
             .enumerate()
             .map(|(i, t)| {
-                let style = if i == self.template_idx {
+                let cmd_preview: String = t.command().chars().take(30).collect();
+                let is_selected = i == self.template_idx;
+                let style = if is_selected {
                     Style::default()
                         .fg(Color::Black)
                         .bg(Color::Cyan)
@@ -722,15 +736,24 @@ impl App {
                 } else {
                     Style::default()
                 };
-                let marker = if i == self.template_idx { "► " } else { "  " };
-                Line::from(Span::styled(format!("{}{}", marker, t.label), style))
+                let cmd_style = if is_selected {
+                    Style::default().fg(Color::DarkGray).bg(Color::Cyan)
+                } else {
+                    Style::default().fg(Color::DarkGray)
+                };
+                let marker = if is_selected { "► " } else { "  " };
+                Line::from(vec![
+                    Span::styled(format!("{}{}", marker, t.label), style),
+                    Span::raw(" "),
+                    Span::styled(format!("| {cmd_preview}"), cmd_style),
+                ])
             })
             .collect();
 
         let block = Block::default()
             .borders(Borders::ALL)
             .border_style(Style::default().fg(Color::Cyan))
-            .title(" Templates (Enter to select, Esc to cancel) ");
+            .title(" Templates (Enter=select, Esc=cancel) ");
 
         let list = Paragraph::new(items).block(block);
 
@@ -738,6 +761,165 @@ impl App {
         let background = Paragraph::new("").style(Style::default().bg(Color::DarkGray));
         frame.render_widget(background, area);
         frame.render_widget(list, popup);
+    }
+
+    fn render_template_form(&self, frame: &mut ratatui::Frame) {
+        let form = match self.form.as_ref() {
+            Some(f) => f,
+            None => return,
+        };
+        let templates = self.templates.templates();
+        let template = templates.get(form.template_idx).unwrap();
+        let area = frame.area();
+
+        // Calculate panel dimensions.
+        let max_label_width: usize = template
+            .params
+            .iter()
+            .map(|p| p.prompt.as_deref().unwrap_or(&p.name).chars().count())
+            .max()
+            .unwrap_or(10);
+
+        let panel_lines: usize = 3
+            + template.params.len() * 2
+            + if form.show_dropdown {
+                template
+                    .params
+                    .get(form.active_input)
+                    .map(|p| p.options.len())
+                    .unwrap_or(0)
+                    + 2
+            } else {
+                0
+            }
+            + 2;
+
+        let width = (max_label_width as u16 + 30).min(70);
+        let height = (panel_lines as u16).min(area.height.saturating_sub(2));
+
+        let popup_width = width.min(area.width.saturating_sub(4));
+        let popup_height = height.min(area.height.saturating_sub(2));
+        let popup = ratatui::layout::Rect::new(
+            (area.width - popup_width) / 2,
+            (area.height - popup_height) / 2,
+            popup_width,
+            popup_height,
+        );
+
+        let mut content: Vec<Line> = Vec::new();
+
+        // Title: template name.
+        content.push(Line::from(Span::styled(
+            template.label.clone(),
+            Style::default().fg(Color::Cyan).add_modifier(Modifier::BOLD),
+        )));
+        content.push(Line::from(""));
+
+        // Command preview: show command with filled values.
+        let mut preview = template.command().to_string();
+        for (i, p) in template.params.iter().enumerate() {
+            if let Some(f) = form.inputs.get(i) {
+                if !f.is_empty() {
+                    preview = preview.replace(&format!("{{{}}}", p.name), f.text());
+                }
+            }
+        }
+        content.push(Line::from(Span::styled(
+            format!("  {preview}"),
+            Style::default().fg(Color::DarkGray),
+        )));
+        content.push(Line::from(""));
+
+        // Parameter input fields.
+        for (i, param) in template.params.iter().enumerate() {
+            let label = param.prompt.as_deref().unwrap_or(&param.name);
+            let is_active = i == form.active_input;
+
+            let label_style = if is_active {
+                Style::default().fg(Color::Yellow).add_modifier(Modifier::BOLD)
+            } else {
+                Style::default().fg(Color::Gray)
+            };
+
+            let buf = &form.inputs[i];
+            let text = buf.text();
+            let cursor_byte = buf.cursor_byte();
+            let cursor_pos = cursor_byte.min(text.len());
+            let before = &text[..cursor_pos];
+            let after = &text[cursor_pos..];
+
+            let indicator = if !param.options.is_empty() { " ▼" } else { "" };
+
+            let input_style = if is_active {
+                Style::default().fg(Color::White).bg(Color::DarkGray)
+            } else {
+                Style::default().fg(Color::Gray)
+            };
+
+            let cursor_style = if is_active {
+                Style::default().bg(Color::White).fg(Color::Black)
+            } else {
+                input_style
+            };
+
+            let mut spans = vec![
+                Span::styled(
+                    format!("  {:>width$} ", label, width = max_label_width),
+                    label_style,
+                ),
+                Span::styled("[", input_style),
+                Span::raw(before.to_string()),
+            ];
+            if is_active {
+                spans.push(Span::styled(" ", cursor_style));
+            }
+            if !after.is_empty() {
+                spans.push(Span::styled(after.to_string(), input_style));
+            }
+            spans.push(Span::styled(format!("]{indicator}"), input_style));
+            content.push(Line::from(spans));
+
+            // Dropdown for params with options.
+            if is_active && form.show_dropdown && !param.options.is_empty() {
+                for (j, opt) in param.options.iter().enumerate() {
+                    let opt_style = if j == form.dropdown_idx {
+                        Style::default().fg(Color::Black).bg(Color::Cyan)
+                    } else {
+                        Style::default().fg(Color::Gray)
+                    };
+                    let marker = if j == form.dropdown_idx { "► " } else { "   " };
+                    content.push(Line::from(Span::styled(
+                        format!("    {}{}", marker, opt),
+                        opt_style,
+                    )));
+                }
+            }
+
+            content.push(Line::from(""));
+        }
+
+        // Help text.
+        let help = if form.show_dropdown {
+            "Tab=select  Enter=pick  Esc=close dropdown"
+        } else {
+            "Tab=next  Shift+Tab=prev  Enter=submit  Esc=cancel  Ctrl+D=options"
+        };
+        content.push(Line::from(Span::styled(
+            format!("  {help}"),
+            Style::default().fg(Color::DarkGray),
+        )));
+
+        let block = Block::default()
+            .borders(Borders::ALL)
+            .border_style(Style::default().fg(Color::Cyan))
+            .title(" Parameters ");
+
+        let paragraph = Paragraph::new(content).block(block);
+
+        // Dim background.
+        let background = Paragraph::new("").style(Style::default().bg(Color::DarkGray));
+        frame.render_widget(background, area);
+        frame.render_widget(paragraph, popup);
     }
 
     fn render_output(&mut self, frame: &mut ratatui::Frame, area: ratatui::layout::Rect) {
