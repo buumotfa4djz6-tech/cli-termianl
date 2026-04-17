@@ -73,10 +73,6 @@ impl TemplateForm {
         }
     }
 
-    fn active_input(&self) -> &InputBuffer {
-        &self.inputs[self.active_input]
-    }
-
     fn active_input_mut(&mut self) -> &mut InputBuffer {
         &mut self.inputs[self.active_input]
     }

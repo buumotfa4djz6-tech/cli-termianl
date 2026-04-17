@@ -1,0 +1,218 @@
+# Default configuration for cli-terminal
+# Edit this file to add/modify commands, macros, templates, and highlight rules.
+# On first run, this file is copied to ~/.config/cli-terminal/config.yaml
+
+# ── F-key macros (direct send, no prompts) ──
+macros:
+  F2: "get_rcm"
+  F3: "update_rcm"
+
+# ── Command autocomplete entries ──
+commands:
+  mscontrol: "3D mouse angle/deep rate control"
+  3dmousectl: "3D mouse full control"
+  custom_3dmousectl: "3D mouse custom speed control"
+  aux3dmousectl: "3D mouse auxiliary control"
+  set_rcm: "Set RCM position"
+  get_rcm: "Query RCM position"
+  update_rcm: "Update RCM"
+  inject: "Inject by mode"
+  custom_inject: "Custom inject"
+  set_step_uL_rate: "Set injection rate"
+  moveys: "Move YS axis"
+  moveenter: "Move enter axis"
+  movels: "Move LS axis"
+  query_motor_pos: "Query motor position"
+  query_kinematic: "Query kinematic parameter"
+  set_kinematic: "Set kinematic parameter"
+  autoseq: "Run auto sequence"
+  check_range: "Check motor range"
+  help: "Show help message"
+  clear: "Clear screen"
+  exit: "Exit application"
+
+# ── Templates (F1 menu, with parameter prompts) ──
+templates:
+  # 3D Mouse Control
+  - label: "mscontrol"
+    command: "mscontrol {side} {angle_rate} {deep_rate}"
+    params:
+      - name: side
+        prompt: "Side"
+        options: [left, right]
+        default: "left"
+      - name: angle_rate
+        prompt: "Angle rate"
+        options: [0.5, 1.0, 1.5, 2.0]
+        default: "1.0"
+      - name: deep_rate
+        prompt: "Depth rate"
+        options: [0.5, 1.0, 1.5, 2.0]
+        default: "1.0"
+
+  - label: "3dmousectl"
+    command: "3dmousectl {mode_ctl} {eyein} {deep_step} {deep_each_space} {deep_multiply} {roi_step} {roi_each_space} {roi_multiply}"
+    params:
+      - name: mode_ctl
+        prompt: "Mode control (int)"
+      - name: eyein
+        prompt: "Eye in hand (0/1)"
+        options: [0, 1]
+        default: "0"
+      - name: deep_step
+      - name: deep_each_space
+      - name: deep_multiply
+      - name: roi_step
+      - name: roi_each_space
+      - name: roi_multiply
+
+  - label: "custom_3dmousectl"
+    command: "custom_3dmousectl {mode_ctl} {eyein} {move_speed} {rotate_speed} {deep_speed}"
+    params:
+      - name: mode_ctl
+        prompt: "Mode control (int)"
+      - name: eyein
+        prompt: "Eye in hand (0/1)"
+        options: [0, 1]
+        default: "0"
+      - name: move_speed
+        prompt: "Move speed"
+      - name: rotate_speed
+        prompt: "Rotate speed"
+      - name: deep_speed
+        prompt: "Deep speed"
+
+  - label: "aux3dmousectl"
+    command: "aux3dmousectl {enter_step} {enter_speed} {rotate_step} {rotate_speed}"
+    params:
+      - name: enter_step
+      - name: enter_speed
+      - name: rotate_step
+      - name: rotate_speed
+
+  # RCM
+  - label: "set_rcm"
+    command: "set_rcm {x} {y} {z}"
+    params:
+      - name: x
+        prompt: "X position (mm)"
+      - name: y
+        prompt: "Y position (mm)"
+      - name: z
+        prompt: "Z position (mm)"
+
+  - label: "update_rcm"
+    command: "update_rcm"
+    params: []
+
+  - label: "get_rcm"
+    command: "get_rcm"
+    params: []
+
+  # Injection
+  - label: "inject"
+    command: "inject {mode} {d_inj}"
+    params:
+      - name: mode
+        prompt: "Injection mode"
+        options: [step, continuous]
+        default: "step"
+      - name: d_inj
+        prompt: "Injection volume"
+
+  - label: "custom_inject"
+    command: "custom_inject {step} {delay} {d_inj}"
+    params:
+      - name: step
+        prompt: "Step (int)"
+      - name: delay
+        prompt: "Delay"
+      - name: d_inj
+        prompt: "Injection volume"
+
+  - label: "set_step_uL_rate"
+    command: "set_step_uL_rate {rate}"
+    params:
+      - name: rate
+        prompt: "Rate in uL"
+
+  # Motor Movement
+  - label: "moveys"
+    command: "moveys {target}"
+    params:
+      - name: target
+        prompt: "Target position YS"
+
+  - label: "moveenter"
+    command: "moveenter {target}"
+    params:
+      - name: target
+        prompt: "Target position enter"
+
+  - label: "movels"
+    command: "movels {target}"
+    params:
+      - name: target
+        prompt: "Target position LS"
+
+  # Query
+  - label: "query_motor_pos"
+    command: "query_motor_pos {motor_group}"
+    params:
+      - name: motor_group
+        prompt: "Motor group"
+
+  - label: "query_kinematic"
+    command: "query_kinematic {param}"
+    params:
+      - name: param
+        prompt: "Kinematic parameter name"
+
+  # Kinematic Settings
+  - label: "set_kinematic"
+    command: "set_kinematic {param} {value}"
+    params:
+      - name: param
+        prompt: "Kinematic parameter name"
+      - name: value
+        prompt: "Value"
+
+  # Auto Sequence
+  - label: "autoseq"
+    command: "autoseq {file}"
+    params:
+      - name: file
+        prompt: "Sequence file path"
+
+  # Range Check
+  - label: "check_range"
+    command: "check_range {motor_type} {motor_count}"
+    params:
+      - name: motor_type
+        prompt: "Motor type"
+      - name: motor_count
+        prompt: "Number of motor positions (int)"
+
+# ── Output highlighting ──
+highlights:
+  - pattern: "ERROR|ERR|FAIL"
+    fg: red
+    bold: true
+  - pattern: "WARN|WARNING"
+    fg: yellow
+  - pattern: "OK|SUCCESS|DONE"
+    fg: green
+  - pattern: "[-+]?\\d+\\.\\d+"
+    fg: cyan
+  - pattern: "\\b(mscontrol|3dmousectl|custom_3dmousectl|aux3dmousectl|set_rcm|get_rcm|update_rcm|inject|custom_inject|moveys|moveenter|movels|query_motor_pos|query_kinematic|set_kinematic|autoseq|check_range|set_step_uL_rate)\\b"
+    fg: magenta
+
+# ── Timestamp ──
+timestamp:
+  enabled: true
+  format: "[%H:%M:%S]"
+
+# ── History ──
+history:
+  max_size: 1000
+  persist: true
