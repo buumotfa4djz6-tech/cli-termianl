@@ -18,6 +18,7 @@ use ratatui::{
     text::{Line, Span},
     widgets::{Block, Borders, Paragraph, Wrap},
 };
+use unicode_segmentation::UnicodeSegmentation;
 
 use crate::config::defaults::{parse_default_config, generate_default_config_yaml};
 use crate::config::manager::{AppConfig, RawConfig};
@@ -108,6 +109,7 @@ pub struct App {
 
     // Mode-specific state
     history_query: String,
+    output_query: String,
     history_search_idx: usize,
     template_idx: usize,
     form: Option<TemplateForm>,
@@ -150,6 +152,7 @@ impl App {
             templates,
             search: SearchState::new(),
             history_query: String::new(),
+            output_query: String::new(),
             history_search_idx: 0,
             template_idx: 0,
             form: None,
@@ -216,8 +219,7 @@ impl App {
         self.config = config.clone();
         self.macros.update(config.macros);
         self.templates.update(config.templates);
-        // Update display timestamp settings.
-        self.display = DisplayWidget::new(config.timestamp_format, config.timestamp_enabled);
+        self.display.update_timestamp_settings(config.timestamp_format, config.timestamp_enabled);
         self.display.add_message("Config reloaded");
     }
 
@@ -379,6 +381,9 @@ impl App {
             (KeyModifiers::CONTROL, KeyCode::Char('r')) => self.enter_history_search(),
             (KeyModifiers::CONTROL, KeyCode::Char('l')) => self.reload_config(),
             (KeyModifiers::CONTROL, KeyCode::Char('e')) => self.export_output(),
+            (KeyModifiers::CONTROL, KeyCode::Char('u')) => { self.input.delete_to_start(); }
+            (KeyModifiers::CONTROL, KeyCode::Char('k')) => { self.input.delete_to_end(); }
+            (KeyModifiers::CONTROL, KeyCode::Char('w')) => { self.input.delete_word(); }
             (_, KeyCode::Char('/')) => self.enter_output_search(),
             (_, KeyCode::F(1)) => self.enter_template_menu(),
             (_, KeyCode::Enter) => self.submit_command(),
@@ -435,7 +440,9 @@ impl App {
                 }
             }
             (_, KeyCode::Backspace) => {
-                self.history_query.pop();
+                if let Some((idx, _)) = self.history_query.grapheme_indices(true).next_back() {
+                    self.history_query.drain(idx..);
+                }
                 self.history_search_idx = 0;
             }
             (_, KeyCode::Char(c)) => {
@@ -451,7 +458,7 @@ impl App {
     fn handle_output_search(&mut self, key: KeyEvent) {
         match (key.modifiers, key.code) {
             (_, KeyCode::Enter) => {
-                self.search.set_query(&self.history_query);
+                self.search.set_query(&self.output_query);
                 self.search.execute(&self.display.raw_lines());
                 self.mode = Mode::Normal;
             }
@@ -466,13 +473,15 @@ impl App {
                 self.search.prev_match();
             }
             (_, KeyCode::Backspace) => {
-                self.history_query.pop();
-                self.search.set_query(&self.history_query);
+                if let Some((idx, _)) = self.output_query.grapheme_indices(true).next_back() {
+                    self.output_query.drain(idx..);
+                }
+                self.search.set_query(&self.output_query);
                 self.search.execute(&self.display.raw_lines());
             }
             (_, KeyCode::Char(c)) => {
-                self.history_query.push(c);
-                self.search.set_query(&self.history_query);
+                self.output_query.push(c);
+                self.search.set_query(&self.output_query);
                 self.search.execute(&self.display.raw_lines());
             }
             _ => {}
@@ -517,7 +526,7 @@ impl App {
 
     fn enter_output_search(&mut self) {
         self.mode = Mode::OutputSearch;
-        self.history_query = String::new();
+        self.output_query = String::new();
         self.search.set_query("");
     }
 
@@ -637,6 +646,9 @@ impl App {
                     }
                 }
             }
+            (KeyModifiers::CONTROL, KeyCode::Char('u')) => { form.active_input_mut().delete_to_start(); }
+            (KeyModifiers::CONTROL, KeyCode::Char('k')) => { form.active_input_mut().delete_to_end(); }
+            (KeyModifiers::CONTROL, KeyCode::Char('w')) => { form.active_input_mut().delete_word(); }
             (_, KeyCode::Tab) => {
                 if form.show_dropdown {
                     let opt_count = template
@@ -964,10 +976,11 @@ impl App {
             styled_lines.push(highlighted);
         }
 
+        let visible_count = styled_lines.len();
         let para = Paragraph::new(styled_lines)
             .wrap(Wrap { trim: false })
             .scroll((
-                self.display.len().saturating_sub(area.height as usize) as u16,
+                visible_count.saturating_sub(area.height as usize) as u16,
                 0,
             ));
 
@@ -996,7 +1009,7 @@ impl App {
         // Search query.
         if self.mode == Mode::OutputSearch {
             spans.push(Span::styled(
-                format!(" /{} ", self.history_query),
+                format!(" /{} ", self.output_query),
                 Style::default().fg(Color::Yellow),
             ));
             if self.search.match_count() > 0 {

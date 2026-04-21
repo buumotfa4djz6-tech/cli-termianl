@@ -1,48 +1,51 @@
-# CLI Terminal
+# cli-terminal
 
-Universal stdin/stdout interaction enhancer.
+A TUI (Terminal User Interface) that enhances terminal interaction. It wraps a target program (or standalone), providing command history with search, syntax highlighting, templates/macros, and output collapse.
 
-## Installation
+Built with Rust, using `ratatui` for TUI rendering and `crossterm` for terminal control.
 
-```bash
-pip install -r requirements.txt
-```
-
-## Usage
+## Commands
 
 ```bash
-# Direct program connection
-python -m cli_terminal ./your-program
-
-# Or pipe input
-echo "command" | python -m cli_terminal
+cargo build                          # Build the project
+cargo run                            # Run without target program
+cargo run -- <program>               # Run connected to a target program (e.g. cargo run -- bash)
+cargo test                           # Run all tests
+cargo check                          # Fast compilation check
 ```
 
-## Configuration
+## Architecture
 
-Configuration file: `~/.config/cli-terminal/config.yaml`
+### Module Structure
 
-See `docs/superpowers/specs/2026-03-26-cli-terminal-design.md` for full configuration options.
+The codebase has 5 modules under `src/`:
 
-## Key Bindings
+| Module | Responsibility |
+|--------|---------------|
+| `app` | Main `App` struct, event loop, terminal lifecycle, child process management, rendering |
+| `config` | YAML config loading/parsing (`RawConfig` → `AppConfig`), color deserialization, default values |
+| `input` | Command history (`HistoryManager`), F-key macros (`MacroManager`), command templates (`TemplateManager`) |
+| `output` | Syntax highlighting (`highlight_line`), regex search (`SearchState`), collapsible regions (`CollapseManager`) |
+| `widgets` | Display widget (`DisplayWidget` for output lines), input buffer (`InputBuffer` with Unicode support) |
 
-| Key | Action |
-|-----|--------|
-| F1 | Template menu |
-| F2-F12 | Macro |
-| Ctrl+R | History search |
-| Ctrl+L | Reload config |
-| / | Search output |
-| n/N | Next/Previous match |
-| Tab | Toggle collapse |
-| Enter | Execute command |
-| Ctrl+C | Quit |
+### Key Data Flows
 
-## Features
+1. **Child process**: A target program is spawned with piped stdin/stdout/stderr. stdout and stderr are read on separate threads and sent through a `crossbeam_channel` to the main event loop, which drains them into `DisplayWidget`.
 
-- **Command History** - Persistent history with search (Ctrl+R)
-- **Macros** - Shortcut commands on F2-F12
-- **Templates** - Parameterized commands with prompts
-- **Output Highlighting** - Keywords like ERROR, WARN, OK highlighted
-- **Search** - Search output with / key, navigate with n/N
-- **Configuration** - YAML config file with hot-reload (Ctrl+L)
+2. **Event loop**: Polls for keyboard input every 50ms, dispatching to mode-specific handlers (`Normal`, `HistorySearch`, `OutputSearch`, `TemplateMenu`). Normal mode handles editing, submission (sends to child stdin), and mode transitions.
+
+3. **Config**: Loaded from `~/.config/cli-terminal/config.yaml`. On startup, default config is written if file doesn't exist. `Ctrl+L` reloads config at runtime.
+
+### Modes
+
+- **Normal**: Command editing, submit with Enter, Ctrl+R for history search, `/` for output search, F1 for template menu, F2-F12 for macros, Ctrl+E to export output, Ctrl+L to reload config
+- **HistorySearch**: Filter history with character-by-character query, navigate with Up/Down
+- **OutputSearch**: Regex search over displayed output, `n`/`N` for next/previous match
+- **TemplateMenu**: Select from configured templates, suspend terminal for parameter prompting
+
+### Notable Details
+
+- `InputBuffer` uses `unicode-segmentation` for proper grapheme cluster handling
+- Highlight rules are applied per-byte using regex; first matching rule wins
+- Config uses a two-layer approach: `RawConfig` (serde-deserializable) → `AppConfig` (typed, flattened)
+- The old Python codebase was removed (see git history for reference)
