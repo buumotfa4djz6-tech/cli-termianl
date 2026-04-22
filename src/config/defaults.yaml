@@ -1,6 +1,10 @@
 # Default configuration for cli-terminal
 # Edit this file to add/modify commands, macros, templates, and highlight rules.
-# On first run, this file is copied to ~/.config/cli-terminal/config.yaml
+#
+# Config loading order:
+#   1. Global config: ~/.config/cli-terminal/config.yaml (or this bundled default)
+#   2. Local config:  ./.config.yaml (current directory, merges on top)
+# Local config fields override the same fields in global config.
 
 # ── F-key macros (direct send, no prompts) ──
 macros:

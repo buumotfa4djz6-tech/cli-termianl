@@ -181,27 +181,42 @@ impl App {
             return Self::fallback_config();
         }
 
-        if !path.exists() {
+        // Load global config (or defaults if missing).
+        let mut raw: RawConfig = if !path.exists() {
             let yaml = generate_default_config_yaml();
             let _ = fs::write(&path, &yaml);
-            let raw: RawConfig =
-                serde_yaml::from_str(&yaml).unwrap_or(Self::fallback_raw());
-            return AppConfig::from_raw(raw);
-        }
-
-        let raw: RawConfig = match fs::read_to_string(&path) {
-            Ok(content) => match serde_yaml::from_str(&content) {
-                Ok(cfg) => cfg,
+            serde_yaml::from_str(&yaml).unwrap_or(Self::fallback_raw())
+        } else {
+            match fs::read_to_string(&path) {
+                Ok(content) => match serde_yaml::from_str(&content) {
+                    Ok(cfg) => cfg,
+                    Err(e) => {
+                        eprintln!("Warning: invalid config YAML: {e}, using defaults");
+                        return Self::fallback_config();
+                    }
+                },
                 Err(e) => {
-                    eprintln!("Warning: invalid config YAML: {e}, using defaults");
+                    eprintln!("Warning: cannot read config: {e}, using defaults");
                     return Self::fallback_config();
                 }
-            },
-            Err(e) => {
-                eprintln!("Warning: cannot read config: {e}, using defaults");
-                return Self::fallback_config();
             }
         };
+
+        // Load local config from current directory and merge on top.
+        let local_path = std::env::current_dir()
+            .ok()
+            .map(|d| d.join(".config.yaml"));
+        if let Some(ref local_path) = local_path {
+            if local_path.exists() {
+                match fs::read_to_string(local_path) {
+                    Ok(content) => match serde_yaml::from_str::<RawConfig>(&content) {
+                        Ok(local) => raw.merge_with(local),
+                        Err(e) => eprintln!("Warning: invalid local config: {e}, skipping"),
+                    },
+                    Err(e) => eprintln!("Warning: cannot read local config: {e}, skipping"),
+                }
+            }
+        }
 
         AppConfig::from_raw(raw)
     }

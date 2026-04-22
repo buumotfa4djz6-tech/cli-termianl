@@ -170,6 +170,31 @@ fn color_to_str(color: &Color) -> &'static str {
     }
 }
 
+impl RawConfig {
+    /// Merge `other` into `self`, with `other` fields taking priority.
+    /// Only fields that are non-empty in `other` are overridden.
+    pub fn merge_with(&mut self, other: Self) {
+        if !other.commands.is_empty() {
+            self.commands.extend(other.commands);
+        }
+        if !other.macros.is_empty() {
+            self.macros.extend(other.macros);
+        }
+        if !other.templates.is_empty() {
+            self.templates = other.templates;
+        }
+        if !other.highlights.is_empty() {
+            self.highlights = other.highlights;
+        }
+        if other.timestamp.enabled || !other.timestamp.format.is_empty() {
+            self.timestamp = other.timestamp;
+        }
+        if other.history.max_size > 0 {
+            self.history = other.history;
+        }
+    }
+}
+
 impl AppConfig {
     pub fn from_raw(raw: RawConfig) -> Self {
         Self {
